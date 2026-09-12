@@ -28,6 +28,8 @@ const ICON = {
   bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
   user: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>`,
   logout: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+  camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+  image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`,
 };
 
 function layout({ title = 'Nord', body, currentUser }) {
@@ -140,11 +142,46 @@ function uploadPage({ error } = {}) {
     <div class="upload-icon">${ICON.plus}</div>
     <h1>Create new post</h1>
     ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
-    <form method="POST" action="/upload" enctype="multipart/form-data">
-      <input type="file" name="image" accept="image/*" required>
+    <form method="POST" action="/upload" enctype="multipart/form-data" id="uploadForm">
+      <input type="file" name="image" id="photoInput" accept="image/*" required style="display:none">
+      <img id="photoPreview" class="photo-preview" style="display:none" alt="preview">
+      <div class="photo-picker-buttons" id="pickerButtons">
+        <button type="button" class="picker-btn" id="cameraBtn">${ICON.camera}<span>Camera</span></button>
+        <button type="button" class="picker-btn" id="galleryBtn">${ICON.image}<span>Gallery</span></button>
+      </div>
+      <p class="file-chosen" id="fileChosenText"></p>
       <textarea name="caption" placeholder="Write a caption..." maxlength="500"></textarea>
       <button type="submit">Share</button>
     </form>
+    <script>
+      (function () {
+        var input = document.getElementById('photoInput');
+        var cameraBtn = document.getElementById('cameraBtn');
+        var galleryBtn = document.getElementById('galleryBtn');
+        var chosenText = document.getElementById('fileChosenText');
+        var preview = document.getElementById('photoPreview');
+
+        cameraBtn.addEventListener('click', function () {
+          input.setAttribute('capture', 'environment');
+          input.click();
+        });
+        galleryBtn.addEventListener('click', function () {
+          input.removeAttribute('capture');
+          input.click();
+        });
+        input.addEventListener('change', function () {
+          if (input.files && input.files[0]) {
+            chosenText.textContent = input.files[0].name;
+            var reader = new FileReader();
+            reader.onload = function (e) {
+              preview.src = e.target.result;
+              preview.style.display = 'block';
+            };
+            reader.readAsDataURL(input.files[0]);
+          }
+        });
+      })();
+    </script>
   </div>`;
 }
 
