@@ -18,8 +18,6 @@ const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
-// Defensive: on a fresh clone/deploy these folders may not exist yet
-// (e.g. an empty git checkout on a hosting platform).
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'db'), { recursive: true });
 
@@ -162,6 +160,29 @@ async function handleComment(req, res, currentUser, postId) {
   redirect(res, req.headers.referer || '/');
 }
 
+async function handleStoryUpload(req, res, currentUser) {
+  const contentType = req.headers['content-type'] || '';
+  const boundary = parseContentType(contentType);
+  if (!boundary) return sendHtml(res, 400, 'Bad request: expected multipart/form-data');
+
+  const raw = await readBody(req);
+  const { files } = parseMultipart(raw, boundary);
+  const image = files.image;
+
+  if (!image || image.data.length === 0) {
+    return sendHtml(res, 400, views.layout({
+      title: 'New story - Nord', currentUser,
+      body: views.storyUploadPage({ error: 'Please choose an image.' }),
+    }));
+  }
+  const ext = path.extname(image.filename) || '.jpg';
+  const filename = `story-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
+  fs.writeFileSync(path.join(UPLOAD_DIR, filename), image.data);
+
+  store.createStory({ userId: currentUser.id, imagePath: filename });
+  redirect(res, '/');
+}
+
 // ---------- router ----------
 const server = http.createServer(async (req, res) => {
   try {
@@ -169,7 +190,6 @@ const server = http.createServer(async (req, res) => {
     const pathname = url.pathname;
     const currentUser = getCurrentUser(req);
 
-    // static assets
     if (pathname.startsWith('/public/')) {
       return serveStaticFile(res, path.join(PUBLIC_DIR, pathname.replace('/public/', '')));
     }
@@ -177,18 +197,18 @@ const server = http.createServer(async (req, res) => {
       return serveStaticFile(res, path.join(UPLOAD_DIR, pathname.replace('/uploads/', '')));
     }
 
-    // auth-required guard for everything except auth pages
     const publicPaths = ['/login', '/register'];
     if (!currentUser && !publicPaths.includes(pathname) && req.method !== 'GET') {
-      // POST to a protected route without auth
       if (!['/login', '/register'].includes(pathname)) return redirect(res, '/login');
     }
 
     if (pathname === '/' && req.method === 'GET') {
       if (!currentUser) return redirect(res, '/login');
       const posts = store.allPostsWithMeta(currentUser.id);
+      const storyAuthors = store.activeStoryAuthors(currentUser.id);
       return sendHtml(res, 200, views.layout({
-        title: 'Nord', currentUser, body: views.feedPage(posts),
+        title: 'Nord', currentUser,
+        body: views.storyBar({ storyAuthors, currentUser }) + views.feedPage(posts),
       }));
     }
 
@@ -206,13 +226,28 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/logout' && req.method === 'POST') return handleLogout(req, res);
 
-    // everything below requires login
     if (!currentUser) return redirect(res, '/login');
 
     if (pathname === '/upload' && req.method === 'GET') {
       return sendHtml(res, 200, views.layout({ title: 'New post - Nord', currentUser, body: views.uploadPage() }));
     }
     if (pathname === '/upload' && req.method === 'POST') return handleUpload(req, res, currentUser);
+
+    if (pathname === '/story/new' && req.method === 'GET') {
+      return sendHtml(res, 200, views.layout({ title: 'New story - Nord', currentUser, body: views.storyUploadPage() }));
+    }
+    if (pathname === '/story/new' && req.method === 'POST') return handleStoryUpload(req, res, currentUser);
+
+    const storyViewMatch = pathname.match(/^\/story\/user\/(\d+)$/);
+    if (storyViewMatch && req.method === 'GET') {
+      const author = store.findUserById(storyViewMatch[1]);
+      if (!author) return sendHtml(res, 404, 'User not found');
+      const stories = store.activeStoriesByUser(author.id);
+      return sendHtml(res, 200, views.layout({
+        title: `${author.username}'s story - Nord`, currentUser,
+        body: views.storyViewerPage({ author, stories }),
+      }));
+    }
 
     const likeMatch = pathname.match(/^\/like\/(\d+)$/);
     if (likeMatch && req.method === 'POST') return handleLike(req, res, currentUser, likeMatch[1]);
