@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 3000;
 const UPLOAD_DIR = path.join(__dirname, 'public', 'uploads');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
+// Defensive: on a fresh clone/deploy these folders may not exist yet
+// (e.g. an empty git checkout on a hosting platform).
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(path.join(__dirname, 'db'), { recursive: true });
 
@@ -190,6 +192,7 @@ const server = http.createServer(async (req, res) => {
     const pathname = url.pathname;
     const currentUser = getCurrentUser(req);
 
+    // static assets
     if (pathname.startsWith('/public/')) {
       return serveStaticFile(res, path.join(PUBLIC_DIR, pathname.replace('/public/', '')));
     }
@@ -197,8 +200,10 @@ const server = http.createServer(async (req, res) => {
       return serveStaticFile(res, path.join(UPLOAD_DIR, pathname.replace('/uploads/', '')));
     }
 
+    // auth-required guard for everything except auth pages
     const publicPaths = ['/login', '/register'];
     if (!currentUser && !publicPaths.includes(pathname) && req.method !== 'GET') {
+      // POST to a protected route without auth
       if (!['/login', '/register'].includes(pathname)) return redirect(res, '/login');
     }
 
@@ -226,6 +231,7 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/logout' && req.method === 'POST') return handleLogout(req, res);
 
+    // everything below requires login
     if (!currentUser) return redirect(res, '/login');
 
     if (pathname === '/upload' && req.method === 'GET') {
@@ -237,6 +243,15 @@ const server = http.createServer(async (req, res) => {
       return sendHtml(res, 200, views.layout({ title: 'New story - Nord', currentUser, body: views.storyUploadPage() }));
     }
     if (pathname === '/story/new' && req.method === 'POST') return handleStoryUpload(req, res, currentUser);
+
+    if (pathname === '/search' && req.method === 'GET') {
+      const q = url.searchParams.get('q') || '';
+      const results = q ? store.searchUsers(q, currentUser.id) : [];
+      return sendHtml(res, 200, views.layout({
+        title: 'Search - Nord', currentUser,
+        body: views.searchPage({ query: q, results }),
+      }));
+    }
 
     const storyViewMatch = pathname.match(/^\/story\/user\/(\d+)$/);
     if (storyViewMatch && req.method === 'GET') {
