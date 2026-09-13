@@ -67,7 +67,7 @@ ${body}
 ${currentUser ? `
 <nav class="bottom-nav">
   <a href="/" class="nav-icon" aria-label="Home">${ICON.home}</a>
-  <a href="#" class="nav-icon" aria-label="Search">${ICON.search}</a>
+  <a href="/search" class="nav-icon" aria-label="Search">${ICON.search}</a>
   <a href="/upload" class="nav-icon" aria-label="New post">${ICON.plus}</a>
   <a href="/profile/${currentUser.id}" class="nav-icon" aria-label="Profile">${ICON.user}</a>
 </nav>` : ''}
@@ -292,7 +292,39 @@ function storyViewerPage({ author, stories }) {
   </div>`;
 }
 
+function searchPage({ query, results }) {
+  return `
+  <div class="search-page">
+    <form method="GET" action="/search" class="search-form">
+      <div class="search-input-wrap">
+        ${ICON.search}
+        <input type="text" name="q" value="${escapeHtml(query)}" placeholder="Search" autocomplete="off" autofocus id="searchInput">
+      </div>
+    </form>
+    <div class="search-results">
+      ${!query ? `<p class="empty-state">Search for people by username.</p>` : ''}
+      ${query && results.length === 0 ? `<p class="empty-state">No users found for "${escapeHtml(query)}".</p>` : ''}
+      ${results.map((u) => `
+      <a href="/profile/${u.id}" class="search-result">
+        <div class="avatar-ring"><span>${escapeHtml(u.username[0].toUpperCase())}</span></div>
+        <span class="search-result-name">${escapeHtml(u.username)}</span>
+      </a>`).join('')}
+    </div>
+    <script>
+      (function () {
+        var input = document.getElementById('searchInput');
+        var form = input.closest('form');
+        var timer;
+        input.addEventListener('input', function () {
+          clearTimeout(timer);
+          timer = setTimeout(function () { form.submit(); }, 450);
+        });
+      })();
+    </script>
+  </div>`;
+}
+
 module.exports = {
   layout, authForm, feedPage, postCard, uploadPage, profilePage,
-  storyBar, storyUploadPage, storyViewerPage,
+  storyBar, storyUploadPage, storyViewerPage, searchPage,
 };
