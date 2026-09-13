@@ -30,6 +30,7 @@ const ICON = {
   logout: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
   camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
   image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`,
+  x: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
 };
 
 function layout({ title = 'Nord', body, currentUser }) {
@@ -202,4 +203,96 @@ function profilePage({ profileUser, posts, currentUser }) {
   </div>`;
 }
 
-module.exports = { layout, authForm, feedPage, postCard, uploadPage, profilePage };
+function storyBar({ storyAuthors, currentUser }) {
+  const others = storyAuthors.filter((a) => a.author.id !== currentUser.id);
+  const ownHasStory = storyAuthors.some((a) => a.author.id === currentUser.id);
+  return `
+  <div class="story-bar">
+    <a href="${ownHasStory ? '/story/user/' + currentUser.id : '/story/new'}" class="story-item">
+      <div class="story-avatar own-avatar">
+        <span>${escapeHtml(currentUser.username[0].toUpperCase())}</span>
+        ${!ownHasStory ? '<span class="add-story-badge">+</span>' : ''}
+      </div>
+      <span class="story-label">Your story</span>
+    </a>
+    ${others.map((a) => `
+    <a href="/story/user/${a.author.id}" class="story-item">
+      <div class="story-avatar">
+        <span>${escapeHtml(a.author.username[0].toUpperCase())}</span>
+      </div>
+      <span class="story-label">${escapeHtml(a.author.username)}</span>
+    </a>`).join('')}
+  </div>`;
+}
+
+function storyUploadPage({ error } = {}) {
+  return `
+  <div class="upload-box">
+    <div class="upload-icon">${ICON.camera}</div>
+    <h1>Add to your story</h1>
+    ${error ? `<p class="error">${escapeHtml(error)}</p>` : ''}
+    <form method="POST" action="/story/new" enctype="multipart/form-data" id="storyForm">
+      <input type="file" name="image" id="storyPhotoInput" accept="image/*" required style="display:none">
+      <img id="storyPhotoPreview" class="photo-preview" style="display:none" alt="preview">
+      <div class="photo-picker-buttons">
+        <button type="button" class="picker-btn" id="storyCameraBtn">${ICON.camera}<span>Camera</span></button>
+        <button type="button" class="picker-btn" id="storyGalleryBtn">${ICON.image}<span>Gallery</span></button>
+      </div>
+      <p class="file-chosen" id="storyFileChosenText"></p>
+      <button type="submit">Share to story</button>
+    </form>
+    <p class="switch"><a href="/">Cancel</a></p>
+    <script>
+      (function () {
+        var input = document.getElementById('storyPhotoInput');
+        var cameraBtn = document.getElementById('storyCameraBtn');
+        var galleryBtn = document.getElementById('storyGalleryBtn');
+        var chosenText = document.getElementById('storyFileChosenText');
+        var preview = document.getElementById('storyPhotoPreview');
+        cameraBtn.addEventListener('click', function () {
+          input.setAttribute('capture', 'environment');
+          input.click();
+        });
+        galleryBtn.addEventListener('click', function () {
+          input.removeAttribute('capture');
+          input.click();
+        });
+        input.addEventListener('change', function () {
+          if (input.files && input.files[0]) {
+            chosenText.textContent = input.files[0].name;
+            var reader = new FileReader();
+            reader.onload = function (e) {
+              preview.src = e.target.result;
+              preview.style.display = 'block';
+            };
+            reader.readAsDataURL(input.files[0]);
+          }
+        });
+      })();
+    </script>
+  </div>`;
+}
+
+function storyViewerPage({ author, stories }) {
+  if (stories.length === 0) {
+    return `<p class="empty-state">This story has expired.</p>`;
+  }
+  return `
+  <div class="story-viewer">
+    <div class="story-viewer-header">
+      <div class="story-viewer-author">
+        <div class="story-avatar small"><span>${escapeHtml(author.username[0].toUpperCase())}</span></div>
+        <span>${escapeHtml(author.username)}</span>
+      </div>
+      <a href="/" class="icon-btn" aria-label="Close">${ICON.x}</a>
+    </div>
+    <div class="story-viewer-images">
+      ${stories.map((s) => `<img src="/uploads/${s.imagePath}" class="story-viewer-image" alt="story">`).join('')}
+    </div>
+  </div>`;
+}
+
+module.exports = {
+  layout, authForm, feedPage, postCard, uploadPage, profilePage,
+  storyBar, storyUploadPage, storyViewerPage,
+};
